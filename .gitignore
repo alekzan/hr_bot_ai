@@ -37,5 +37,6 @@ flask-app.log
 data_utilities.py
 .venv/
 # EXCEPTION: keep this one
-!agents_vertex_test.ipynbkeys/
+!agents_vertex_test.ipynb
+keys/
 *.json

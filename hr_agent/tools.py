@@ -1,10 +1,10 @@
 import base64
 import json
 import os
-import requests
 import sqlite3
-import uuid
 import time
+
+from vertexai.preview.vision_models import ImageGenerationModel
 
 # --- GLOBAL CONFIGURATION (loaded once) ---
 # These are loaded from the .env file by the ADK runner.
@@ -27,62 +27,37 @@ def create_image(tool_context, prompt: str) -> dict:
         print(f"ERROR: {error_msg}")
         return {"error": error_msg}
 
-    # 2. Get a fresh gcloud access token
-    try:
-        token_command = "gcloud auth print-access-token"
-        access_token = os.popen(token_command).read().strip()
-        if not access_token:
-            raise ValueError("Token is empty. Is gcloud authenticated?")
-    except Exception as e:
-        error_msg = f"Error obtaining gcloud access token: {e}"
-        print(f"ERROR: {error_msg}")
-        return {"error": error_msg}
+    print(f"Generating 2 images with prompt: '{prompt}' in project {PROJECT_ID} and location {LOCATION}")
 
-    print(f"Generating 2 images with prompt: '{prompt}'")
-
-    # 3. Prepare and make the API request
     try:
-        api_url = (
-            f"https://{LOCATION}-aiplatform.googleapis.com/v1/projects/"
-            f"{PROJECT_ID}/locations/{LOCATION}/publishers/google/models/"
-            "imagen-4.0-generate-preview-06-06:predict"
+        # 2. Initialize the Vertex AI model
+        model = ImageGenerationModel.from_pretrained("imagen-4.0-generate-preview-06-06")
+
+        # 3. Generate images
+        response = model.generate_images(
+            prompt=prompt,
+            number_of_images=2,
+            aspect_ratio="3:4",
         )
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/json; charset=utf-8",
-        }
-        payload = {
-            "instances": [{"prompt": prompt}],
-            "parameters": {"sampleCount": 2, "aspectRatio": "3:4"},
-        }
-
-        response = requests.post(api_url, headers=headers, json=payload)
-        response.raise_for_status()  # Check for HTTP errors
-        response_json = response.json()
-
-        if "predictions" not in response_json or not response_json["predictions"]:
-            raise ValueError("API response did not contain predictions.")
 
         # 4. Process response and save images locally
         image_urls = []
         timestamp = int(time.time())
         
-        for i, prediction in enumerate(response_json["predictions"]):
+        for i, image in enumerate(response.images):
             # Generate unique filename
             image_filename = f"{timestamp}_{i+1}.png"
             image_path = os.path.join(IMAGES_DIR, image_filename)
             
-            # Decode and save image
-            image_data = base64.b64decode(prediction["bytesBase64Encoded"])
-            with open(image_path, "wb") as f:
-                f.write(image_data)
+            # Save image
+            image.save(location=image_path)
             
             # Create URL for serving
             image_url = f"/images/{image_filename}"
             image_urls.append(image_url)
             print(f"Saved image to {image_path}")
 
-        # 5. Store only the URLs in session state (no base64!)
+        # 5. Store only the URLs in session state
         tool_context.state["generated_image_urls"] = image_urls
         tool_context.state["last_image_generation"] = prompt
 
@@ -90,12 +65,8 @@ def create_image(tool_context, prompt: str) -> dict:
         print(success_msg)
         return {"status": "success", "message": success_msg, "image_urls": image_urls}
 
-    except requests.exceptions.HTTPError as http_err:
-        error_msg = f"HTTP Error: {http_err.response.status_code} {http_err.response.text}"
-        print(f"ERROR: {error_msg}")
-        return {"error": error_msg}
     except Exception as e:
-        error_msg = f"An unexpected error occurred: {e}"
+        error_msg = f"An unexpected error occurred during image generation: {e}"
         print(f"ERROR: {error_msg}")
         return {"error": error_msg}
 

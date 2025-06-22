@@ -202,8 +202,9 @@ async def chat_with_agent(request: ChatRequest):
         # Ensure session exists
         await get_or_create_session()
         
-        # Clear images from previous conversation topics at the start of each new request
+        # Clear any existing images at the start of each request
         current_session = await get_or_create_session()
+        current_session.state["generated_image_urls"] = []
         
         # Clear session history if it's getting too large (prevent token limit issues)
         if len(current_session.events) > 10:  # Keep only last 10 events
@@ -228,16 +229,15 @@ async def chat_with_agent(request: ChatRequest):
                     final_response = event.content.parts[0].text
                 break
         
-        # Only get images if they were generated in this conversation turn
-        # Check if the session state was updated during this request
+        # Get any images that were generated during this request
         updated_session = await get_or_create_session()
         session_image_urls = updated_session.state.get("generated_image_urls", [])
         
-        # Return image URLs only if they exist (meaning they were just generated)
         if session_image_urls:
             current_images = session_image_urls
-            # Clear the image URLs from session state after returning them
+            # Clear the images immediately after retrieving them
             updated_session.state["generated_image_urls"] = []
+
         
         return {
             "response": final_response or "I received your message.",

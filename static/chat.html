@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HR Agent Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-6 max-w-6xl min-h-screen flex flex-col">
+        <!-- Header -->
+        <div class="text-center mb-4">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">HR Agent Chat</h1>
+            <p class="text-gray-600">Chat with your AI assistant for HR insights and poster generation</p>
+            <div class="flex items-center justify-center space-x-4 mt-2">
+                <a href="/" class="text-blue-600 hover:text-blue-800 text-sm">
+                    ← Back to Message Board
+                </a>
+                <button id="newChatBtn" onclick="startNewChat()" 
+                        class="bg-red-500 hover:bg-red-600 text-white text-sm px-3 py-1 rounded transition duration-200">
+                    🗑️ New Chat
+                </button>
+            </div>
+        </div>
+
+        <!-- Chat Container -->
+        <div class="bg-white rounded-lg shadow-md flex-1 flex flex-col min-h-0" style="height: calc(100vh - 280px);">
+            <!-- Chat Messages Area -->
+            <div id="chatMessages" class="flex-1 p-6 overflow-y-auto space-y-4 min-h-0">
+                <div class="text-center text-gray-500 py-8">
+                    <p>👋 Hello! I'm your HR assistant. Ask me to analyze messages or create posters!</p>
+                </div>
+            </div>
+
+            <!-- Chat Input Area -->
+            <div class="border-t border-gray-200 p-4 bg-gray-50">
+                <form id="chatForm" class="flex space-x-4">
+                    <input 
+                        type="text" 
+                        id="chatInput" 
+                        placeholder="Ask about message patterns, or request a poster..."
+                        class="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                        maxlength="500"
+                        required
+                    />
+                    <button 
+                        type="submit" 
+                        id="sendBtn"
+                        class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg transition duration-200">
+                        Send
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4 flex-shrink-0">
+            <h3 class="text-lg font-medium text-blue-800 mb-3">💡 Quick Actions</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <button onclick="quickMessage('What are the most common complaints?')" 
+                        class="text-left p-3 bg-white border border-blue-200 rounded-lg hover:bg-blue-50 text-sm transition duration-200">
+                    📊 Analyze common complaints
+                </button>
+                <button onclick="quickMessage('Summarize all messages')" 
+                        class="text-left p-3 bg-white border border-blue-200 rounded-lg hover:bg-blue-50 text-sm transition duration-200">
+                    📝 Summarize all messages
+                </button>
+                <button onclick="quickMessage('Create a poster about kitchen cleanliness')" 
+                        class="text-left p-3 bg-white border border-blue-200 rounded-lg hover:bg-blue-50 text-sm transition duration-200">
+                    🖼️ Create kitchen cleanliness poster
+                </button>
+                <button onclick="quickMessage('Generate an ergonomic workplace poster')" 
+                        class="text-left p-3 bg-white border border-blue-200 rounded-lg hover:bg-blue-50 text-sm transition duration-200">
+                    🪑 Create ergonomic poster
+                </button>
+            </div>
+        </div>
+
+        <!-- Success/Error Messages -->
+        <div id="notification" class="fixed top-4 right-4 hidden">
+            <div class="bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg">
+                <span id="notificationText"></span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Chat functionality
+        const chatMessages = document.getElementById('chatMessages');
+        const chatForm = document.getElementById('chatForm');
+        const chatInput = document.getElementById('chatInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const newChatBtn = document.getElementById('newChatBtn');
+
+        // Load chat history on page load
+        window.addEventListener('load', async function() {
+            await loadChatHistory();
+        });
+
+        // Load existing chat history
+        async function loadChatHistory() {
+            try {
+                const response = await fetch('/api/chat/history');
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Clear welcome message
+                    const welcomeMsg = chatMessages.querySelector('.text-center');
+                    if (welcomeMsg && data.messages.length > 0) {
+                        welcomeMsg.style.display = 'none';
+                    }
+                    
+                    // Add messages to chat
+                    data.messages.forEach(msg => {
+                        addMessage(msg.content, msg.isUser, msg.images || []);
+                    });
+                    
+                    // If there are recent images, add them to the last agent message
+                    if (data.images && data.images.length > 0) {
+                        // Find the last agent message and add images
+                        const messageElements = chatMessages.querySelectorAll('.flex');
+                        for (let i = messageElements.length - 1; i >= 0; i--) {
+                            const msgElement = messageElements[i];
+                            if (!msgElement.classList.contains('justify-end')) { // Agent message
+                                const bubbleDiv = msgElement.querySelector('div');
+                                const existingImages = bubbleDiv.querySelector('.mt-4');
+                                if (!existingImages) {
+                                    addImagesToMessage(bubbleDiv, data.images);
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.log('No previous chat history found');
+            }
+        }
+
+        // Start a new chat conversation
+        async function startNewChat() {
+            try {
+                newChatBtn.disabled = true;
+                newChatBtn.textContent = '🔄 Starting...';
+                
+                const response = await fetch('/api/chat/new', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                if (response.ok) {
+                    // Clear the chat messages
+                    chatMessages.innerHTML = '';
+                    
+                    // Show welcome message
+                    const welcomeDiv = document.createElement('div');
+                    welcomeDiv.className = 'text-center text-gray-500 py-8';
+                    welcomeDiv.innerHTML = '<p>👋 Hello! I\'m your HR assistant. Ask me to analyze messages or create posters!</p>';
+                    chatMessages.appendChild(welcomeDiv);
+                    
+                    showNotification('New conversation started!', 'success');
+                } else {
+                    showNotification('Failed to start new conversation', 'error');
+                }
+            } catch (error) {
+                showNotification('Error starting new conversation', 'error');
+            } finally {
+                newChatBtn.disabled = false;
+                newChatBtn.textContent = '🗑️ New Chat';
+            }
+        }
+
+        // Helper function to add images to an existing message
+        function addImagesToMessage(bubbleDiv, images) {
+            if (images && images.length > 0) {
+                const imagesDiv = document.createElement('div');
+                imagesDiv.className = 'mt-4 space-y-3';
+                
+                images.forEach((imageUrl, index) => {
+                    const imgDiv = document.createElement('div');
+                    imgDiv.className = 'bg-white p-3 rounded-lg border border-gray-200';
+                    
+                    const img = document.createElement('img');
+                    img.src = imageB64; // Now it's a URL, not base64 
+                    img.className = 'w-full max-w-md rounded-lg shadow-sm';
+                    img.style.aspectRatio = '3/4';
+                    img.alt = `Generated poster ${index + 1}`;
+                    
+                    const caption = document.createElement('p');
+                    caption.className = 'text-sm text-gray-600 mt-2 font-medium';
+                    caption.textContent = `Generated Poster ${index + 1}`;
+                    
+                    imgDiv.appendChild(img);
+                    imgDiv.appendChild(caption);
+                    imagesDiv.appendChild(imgDiv);
+                });
+                
+                bubbleDiv.appendChild(imagesDiv);
+            }
+        }
+
+        // Initialize chat
+        function initializeChat() {
+            // Clear the welcome message when first message is sent
+            const welcomeMsg = chatMessages.querySelector('.text-center');
+            if (welcomeMsg) {
+                welcomeMsg.style.display = 'none';
+            }
+        }
+
+        // Add message to chat
+        function addMessage(content, isUser = false, images = []) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`;
+            
+            const bubbleDiv = document.createElement('div');
+            bubbleDiv.className = `max-w-2xl lg:max-w-3xl px-5 py-3 rounded-lg text-base leading-relaxed ${
+                isUser 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-gray-100 text-gray-800 border border-gray-200'
+            }`;
+            
+            // Add text content
+            const textP = document.createElement('p');
+            textP.textContent = content;
+            textP.className = 'whitespace-pre-wrap';
+            bubbleDiv.appendChild(textP);
+            
+            // Add images if present
+            if (images && images.length > 0) {
+                const imagesDiv = document.createElement('div');
+                imagesDiv.className = 'mt-4 space-y-3';
+                
+                images.forEach((imageUrl, index) => {
+                    const imgDiv = document.createElement('div');
+                    imgDiv.className = 'bg-white p-3 rounded-lg border border-gray-200';
+                    
+                    const img = document.createElement('img');
+                    img.src = imageUrl; // Now it's a URL, not base64
+                    img.className = 'w-full max-w-md rounded-lg shadow-sm';
+                    img.style.aspectRatio = '3/4'; // Ensure 3:4 ratio
+                    img.alt = `Generated poster ${index + 1}`;
+                    
+                    const caption = document.createElement('p');
+                    caption.className = 'text-sm text-gray-600 mt-2 font-medium';
+                    caption.textContent = `Generated Poster ${index + 1}`;
+                    
+                    imgDiv.appendChild(img);
+                    imgDiv.appendChild(caption);
+                    imagesDiv.appendChild(imgDiv);
+                });
+                
+                bubbleDiv.appendChild(imagesDiv);
+            }
+            
+            messageDiv.appendChild(bubbleDiv);
+            chatMessages.appendChild(messageDiv);
+            
+            // Scroll to bottom
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Send message to API
+        async function sendMessage(message) {
+            if (!message.trim()) return;
+            
+            // Initialize chat on first message
+            initializeChat();
+            
+            // Add user message to chat
+            addMessage(message, true);
+            
+            // Show loading state
+            sendBtn.disabled = true;
+            sendBtn.textContent = 'Sending...';
+            
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: message })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    
+                    // Add agent response to chat
+                    addMessage(result.response, false, result.images || []);
+                    
+                    if (!result.success && result.error) {
+                        showNotification(`Error: ${result.error}`, 'error');
+                    }
+                } else {
+                    const error = await response.json();
+                    addMessage("Sorry, I encountered an error processing your request.", false);
+                    showNotification(error.detail || 'Failed to send message', 'error');
+                }
+            } catch (error) {
+                addMessage("Sorry, I'm having trouble connecting right now.", false);
+                showNotification('Network error. Please try again.', 'error');
+            } finally {
+                sendBtn.disabled = false;
+                sendBtn.textContent = 'Send';
+            }
+        }
+
+        // Handle form submission
+        chatForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const message = chatInput.value.trim();
+            if (message) {
+                chatInput.value = ''; // Clear immediately after getting the message
+                await sendMessage(message);
+            }
+        });
+
+        // Quick message function
+        async function quickMessage(message) {
+            chatInput.value = message;
+            await sendMessage(message);
+            chatInput.value = '';
+        }
+
+        // Show notification
+        function showNotification(text, type) {
+            const notification = document.getElementById('notification');
+            const notificationText = document.getElementById('notificationText');
+            
+            notificationText.textContent = text;
+            
+            // Remove existing classes and add appropriate ones
+            notification.firstElementChild.classList.remove('bg-green-500', 'bg-red-500');
+            if (type === 'success') {
+                notification.firstElementChild.classList.add('bg-green-500');
+            } else {
+                notification.firstElementChild.classList.add('bg-red-500');
+            }
+            
+            notification.classList.remove('hidden');
+            
+            // Hide after 4 seconds
+            setTimeout(() => {
+                notification.classList.add('hidden');
+            }, 4000);
+        }
+
+        // Allow enter key to send message
+        chatInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                chatForm.dispatchEvent(new Event('submit'));
+            }
+        });
+    </script>
+</body>
+</html>

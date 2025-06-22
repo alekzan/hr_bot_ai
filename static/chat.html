@@ -183,7 +183,7 @@
                     imgDiv.className = 'bg-white p-3 rounded-lg border border-gray-200';
                     
                     const img = document.createElement('img');
-                    img.src = imageB64; // Now it's a URL, not base64 
+                    img.src = imageUrl; // Now it's a URL, not base64 
                     img.className = 'w-full max-w-md rounded-lg shadow-sm';
                     img.style.aspectRatio = '3/4';
                     img.alt = `Generated poster ${index + 1}`;
@@ -192,8 +192,14 @@
                     caption.className = 'text-sm text-gray-600 mt-2 font-medium';
                     caption.textContent = `Generated Poster ${index + 1}`;
                     
+                    const downloadBtn = document.createElement('button');
+                    downloadBtn.className = 'mt-2 px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors';
+                    downloadBtn.textContent = '📥 Download';
+                    downloadBtn.onclick = () => downloadImage(imageUrl, `poster_${index + 1}.png`);
+                    
                     imgDiv.appendChild(img);
                     imgDiv.appendChild(caption);
+                    imgDiv.appendChild(downloadBtn);
                     imagesDiv.appendChild(imgDiv);
                 });
                 
@@ -247,8 +253,14 @@
                     caption.className = 'text-sm text-gray-600 mt-2 font-medium';
                     caption.textContent = `Generated Poster ${index + 1}`;
                     
+                    const downloadBtn = document.createElement('button');
+                    downloadBtn.className = 'mt-2 px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors';
+                    downloadBtn.textContent = '📥 Download';
+                    downloadBtn.onclick = () => downloadImage(imageUrl, `poster_${index + 1}.png`);
+                    
                     imgDiv.appendChild(img);
                     imgDiv.appendChild(caption);
+                    imgDiv.appendChild(downloadBtn);
                     imagesDiv.appendChild(imgDiv);
                 });
                 
@@ -346,6 +358,16 @@
             setTimeout(() => {
                 notification.classList.add('hidden');
             }, 4000);
+        }
+
+        // Download image function
+        function downloadImage(imageUrl, filename) {
+            const link = document.createElement('a');
+            link.href = imageUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
 
         // Allow enter key to send message
